@@ -1,0 +1,7 @@
+*.ipynb_checkpoints/ .venv/ 
+.venv/
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.onnx
