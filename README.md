@@ -47,21 +47,18 @@ cv-research-copilot/
 │   │   └── extract.py                     # POST /extract
 │   ├── schemas.py                         # Pydantic models (I/O)
 │   └── deps.py                            # Paths, env, constants
-│
 ├── ui/                                    # Streamlit frontend
 │   └── app.py                             # Single-page UI (upload / ask / extract)
-│
 ├── data/                                  # Local storage (gitignored)
 │   ├── pdfs/                              # Uploaded PDFs
 │   ├── store/                             # Parsed blocks / chunks
 │   └── index/                             # FAISS index + metadata
-│
 ├── .env.example                           # Example environment variables
 ├── requirements.txt                       # Python dependencies
 ├── Dockerfile                             # App image (FastAPI + Streamlit)
 ├── docker-compose.yml                     # Services: app + ollama (profiles)
-├── assets
-    └── demo.mp4                           # Demo video
+├── assets/
+│    └── demo.mp4                          # Demo video
 └── README.md                              # You are here 
 ```
 
@@ -261,7 +258,7 @@ OLLAMA_BASE_URL=http://localhost:11434  # local dev; in Docker it's http://ollam
 1. Fork this repo  
 2. Create a feature branch: `git checkout -b feat/my-feature`  
 3. Commit & push: `git push origin feat/my-feature`  
-4. Open a Pull Request 🚀
+4. Open a Pull Request 
 
 ---
 
