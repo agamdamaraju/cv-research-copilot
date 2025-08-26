@@ -7,8 +7,9 @@ Runs great on a MacBook Pro (M4 series). Supports **OpenAI** or local **Ollama**
 ---
 
 ## Demo
+https://github.com/user-attachments/assets/213a355b-df75-4046-a6af-0649c166bc65
 
-https://github.com/user-attachments/assets/18954299-6296-4e8a-98fd-5a1b107f25bf
+
 
 
 
