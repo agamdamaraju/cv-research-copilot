@@ -1,14 +1,15 @@
 # CV Research Copilot (LLM)
 
 A domain-specific RAG assistant for **computer vision papers**.  
-Upload a PDF → ask questions with **page-level citations** like `[p:12]` → extract a **strict JSON** of methods/datasets/metrics/ablations (with page refs for every number).  
+Upload a PDF: ask questions with **page-level citations** like `[p:12]`: extract a **strict JSON** of methods/datasets/metrics/ablations (with page refs for every number).  
 Runs great on a MacBook Pro (M4 series). Supports **OpenAI** or local **Ollama**; ships with **Docker**.
 
 ---
 
 ## Demo
-
-- **Video:** `[Watch the demo](/Users/agamdamaraju/Downloads/CV_Copilot_demo.mp4)`  
+<video src="assets/demo.mp4" controls width="720">
+  Your browser does not support the video tag.
+</video>
 
 ---
 
@@ -55,6 +56,8 @@ cv-research-copilot/
 ├── requirements.txt                       # Python dependencies
 ├── Dockerfile                             # App image (FastAPI + Streamlit)
 ├── docker-compose.yml                     # Services: app + ollama (profiles)
+├── assets
+    └── demo.mp4                           # Demo video
 └── README.md                              # You are here 
 ```
 
@@ -93,9 +96,9 @@ $ uvicorn app.main:app --host 0.0.0.0 --port 8000
 $ streamlit run ui/app.py --server.port 8501
 ```
 
-- Backend → <http://localhost:8000>  
-- API docs → <http://localhost:8000/docs>  
-- UI → <http://localhost:8501>
+- Backend: <http://localhost:8000>  
+- API docs: <http://localhost:8000/docs>  
+- UI: <http://localhost:8501>
 
 **Optional (Streamlit secrets):** to change backend from the UI, create `~/.streamlit/secrets.toml`:
 
