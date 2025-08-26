@@ -1,4 +1,3 @@
-# app/routes/extract.py
 from fastapi import APIRouter, HTTPException
 import json
 import re
@@ -20,8 +19,6 @@ from app.core.retrieve import Retriever
 from app.core.prompts import JSON_SYSTEM, JSON_USER_TEMPLATE, JSON_SCHEMA_STR
 from app.core.llm import LLMClient
 
-
-# ------------------------- coercion helpers -------------------------
 
 def _coerce_str(x) -> str:
     if x is None:
@@ -82,11 +79,7 @@ def normalize_paperjson(raw: dict) -> dict:
     Ensures presence and types for: title, tasks, methods, datasets, metrics, ablations.
     """
     out = {}
-
-    # title
     out["title"] = _coerce_str(raw.get("title"))
-
-    # tasks
     tasks = raw.get("tasks") or []
     out["tasks"] = []
     if isinstance(tasks, list):
@@ -99,11 +92,9 @@ def normalize_paperjson(raw: dict) -> dict:
     else:
         out["tasks"] = []
 
-    # methods
     out["methods"] = []
     for m in raw.get("methods") or []:
         if not isinstance(m, dict):
-            # allow string names
             out["methods"].append({
                 "name": _coerce_str(m),
                 "components": [],
@@ -123,7 +114,7 @@ def normalize_paperjson(raw: dict) -> dict:
             "losses": [_coerce_str(c) for c in losses if _coerce_str(c)],
         })
 
-    # datasets (also accept "databases" / "data" synonyms)
+    # also accept "databases" / "data" synonyms
     datasets = raw.get("datasets")
     if datasets is None:
         datasets = raw.get("databases") or raw.get("data") or []
@@ -137,7 +128,6 @@ def normalize_paperjson(raw: dict) -> dict:
         elif isinstance(d, str):
             out["datasets"].append({"name": d.strip(), "split": None})
 
-    # metrics
     out["metrics"] = []
     for m in raw.get("metrics") or []:
         if not isinstance(m, dict):
@@ -154,7 +144,6 @@ def normalize_paperjson(raw: dict) -> dict:
                 "page": page,
             })
 
-    # ablations
     out["ablations"] = []
     for a in (raw.get("ablations") or []):
         if isinstance(a, dict):
@@ -165,7 +154,6 @@ def normalize_paperjson(raw: dict) -> dict:
         else:
             out["ablations"].append({"variable": _coerce_str(a), "best_value": None})
 
-    # defaults
     out.setdefault("tasks", [])
     out.setdefault("methods", [])
     out.setdefault("datasets", [])
@@ -211,14 +199,12 @@ def parse_json_safely(text: str) -> dict:
     if not text or not text.strip():
         raise ValueError("empty response")
 
-    # 1) fast path: direct
     t = _strip_code_fences(text)
     try:
         return json.loads(t)
     except Exception:
         pass
 
-    # 2) widest braces
     first = t.find("{")
     last = t.rfind("}")
     if first != -1 and last != -1 and last > first:
@@ -228,18 +214,13 @@ def parse_json_safely(text: str) -> dict:
         except Exception:
             pass
 
-    # 3) scan balanced objects, pick the first that parses
     for obj in _extract_first_balanced_json(t):
         try:
             return json.loads(obj)
         except Exception:
             continue
 
-    # Nothing parsed
     raise ValueError("could not parse JSON from model output")
-
-
-# ------------------------- route -------------------------
 
 router = APIRouter()
 
@@ -248,7 +229,6 @@ async def extract(req: ExtractRequest):
     index = IndexStore(EMBED_MODEL, INDEX_DIR)
     retriever = Retriever(index, RERANK_MODEL)
 
-    # Broad CV extraction query to pull metrics/tables/method parts
     q = "methods loss function architecture dataset split metric table AP mAP mIoU results ablation sota"
     chunks = retriever.retrieve(req.doc_id, q, k=TOP_K)
     if not chunks:
@@ -256,7 +236,6 @@ async def extract(req: ExtractRequest):
 
     context = Retriever.pack_context(chunks)
 
-    # System & user prompts
     system = JSON_SYSTEM.format(schema=JSON_SCHEMA_STR)
     user = (
         JSON_USER_TEMPLATE.format(context=context)
@@ -270,7 +249,6 @@ async def extract(req: ExtractRequest):
     llm = LLMClient(MODEL_PRIMARY, MODEL_LOCAL, USE_LOCAL, OPENAI_API_KEY)
 
     try:
-        # expect_json=True enables JSON mode (OpenAI response_format or Ollama format:"json")
         raw = llm.generate(system, user, expect_json=True)
     except requests.HTTPError as e:
         if e.response is not None and e.response.status_code == 401:
@@ -280,7 +258,6 @@ async def extract(req: ExtractRequest):
             )
         raise
 
-    # Robust parsing + normalization
     try:
         data = parse_json_safely(raw)
         data = normalize_paperjson(data)

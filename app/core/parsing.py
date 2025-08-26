@@ -25,7 +25,6 @@ def _is_heading(text: str) -> bool:
     s = text.strip()
     if len(s) <= 80 and (s.isupper() or any(s.startswith(f"{i}.") for i in range(1, 10))):
         return True
-    # You can extend with more heuristics if needed.
     return False
 
 
@@ -40,7 +39,6 @@ def parse_pdf_to_blocks(pdf_path: Path, doc_id: str, store_path: Path) -> List[B
     with fitz.open(str(pdf_path)) as doc:
         for i, page in enumerate(doc):
             page_num = i + 1
-            # 'dict' preserves some layout; we'll stitch spans into lines
             text_dict = page.get_text("dict")
             section_stack: List[str] = []
             for b in text_dict.get("blocks", []):
@@ -57,17 +55,15 @@ def parse_pdf_to_blocks(pdf_path: Path, doc_id: str, store_path: Path) -> List[B
                         page=page_num,
                         kind=kind,
                         text=line_text,
-                        bbox=None,                  # Could capture bbox from spans if desired
+                        bbox=None,                
                         section_path=section_stack.copy(),
                         id=str(uuid.uuid4()),
                     )
                     blocks.append(blk)
                     if kind == "heading":
-                        # Maintain a simple section path of the last few headings
                         section_stack.append(line_text)
                         section_stack = section_stack[-3:]
 
-    # ---- Tables via pdfplumber (best effort) ----
     try:
         with pdfplumber.open(str(pdf_path)) as pdf:
             for i, page in enumerate(pdf.pages):
@@ -77,7 +73,6 @@ def parse_pdf_to_blocks(pdf_path: Path, doc_id: str, store_path: Path) -> List[B
                 except Exception:
                     tables = []
                 for tbl in tables:
-                    # Represent table as TSV lines to preserve some structure
                     rows = ["\t".join("" if c is None else str(c) for c in row) for row in tbl]
                     text = "\n".join(rows)
                     blocks.append(
@@ -91,11 +86,8 @@ def parse_pdf_to_blocks(pdf_path: Path, doc_id: str, store_path: Path) -> List[B
                             id=str(uuid.uuid4()),
                         )
                     )
-    except Exception:
-        # Some PDFs (scanned) may fail; don't block ingestion
-        pass
+    except Exception: pass
 
-    # ---- Persist for downstream steps ----
     store_path.parent.mkdir(parents=True, exist_ok=True)
     with store_path.open("w", encoding="utf-8") as f:
         for blk in blocks:

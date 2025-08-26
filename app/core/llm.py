@@ -1,8 +1,6 @@
-# app/core/llm.py
 from __future__ import annotations
 import requests, json, os, time
 
-# Docker-friendly default; override in .env on bare-metal dev if needed
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 OLLAMA_TIMEOUT_SEC = int(os.getenv("OLLAMA_TIMEOUT_SEC", "600"))
 OLLAMA_RETRY = int(os.getenv("OLLAMA_RETRY", "6"))
@@ -27,7 +25,6 @@ class LLMClient:
             return self._ollama_generate(system, user, expect_json=expect_json)
         return self._openai_chat(system, user, expect_json)
 
-    # ---------- OpenAI ----------
     def _openai_chat(self, system: str, user: str, expect_json: bool) -> str:
         url = "https://api.openai.com/v1/chat/completions"
         key = self.openai_key
@@ -49,7 +46,6 @@ class LLMClient:
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
 
-    # ---------- Ollama ----------
     def _ollama_generate(self, system: str, user: str, expect_json: bool) -> str:
         model = _normalize_ollama_name(self.local or "llama3.1")
         self._ollama_ensure_model(model)
