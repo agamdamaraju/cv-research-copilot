@@ -9,6 +9,8 @@ Runs great on a MacBook Pro (M4 series). Supports **OpenAI** or local **Ollama**
 ## Demo
 https://github.com/user-attachments/assets/213a355b-df75-4046-a6af-0649c166bc65
 
+Paper used in this demo:
+Lin, T., Dollár, P., Girshick, R.B., He, K., Hariharan, B., & Belongie, S.J. (2016). Feature Pyramid Networks for Object Detection. 2017 IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 936-944.
 
 
 
