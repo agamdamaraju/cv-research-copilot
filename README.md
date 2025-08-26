@@ -7,9 +7,10 @@ Runs great on a MacBook Pro (M4 series). Supports **OpenAI** or local **Ollama**
 ---
 
 ## Demo
-<video src="assets/demo.mp4" controls width="720">
-  Your browser does not support the video tag.
-</video>
+
+https://github.com/user-attachments/assets/18954299-6296-4e8a-98fd-5a1b107f25bf
+
+
 
 ---
 
