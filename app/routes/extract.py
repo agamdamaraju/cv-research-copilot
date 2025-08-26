@@ -1,13 +1,27 @@
+# app/routes/extract.py
 from fastapi import APIRouter, HTTPException
-import json, re
+import json
+import re
+import requests
+
 from app.schemas import ExtractRequest, ExtractResponse, PaperJSON
-from app.deps import INDEX_DIR, EMBED_MODEL, RERANK_MODEL, MODEL_PRIMARY, MODEL_LOCAL, USE_LOCAL, OPENAI_API_KEY, TOP_K
+from app.deps import (
+    INDEX_DIR,
+    EMBED_MODEL,
+    RERANK_MODEL,
+    MODEL_PRIMARY,
+    MODEL_LOCAL,
+    USE_LOCAL,
+    OPENAI_API_KEY,
+    TOP_K,
+)
 from app.core.embed import IndexStore
 from app.core.retrieve import Retriever
 from app.core.prompts import JSON_SYSTEM, JSON_USER_TEMPLATE, JSON_SCHEMA_STR
 from app.core.llm import LLMClient
-import requests
-import math
+
+
+# ------------------------- coercion helpers -------------------------
 
 def _coerce_str(x) -> str:
     if x is None:
@@ -65,8 +79,10 @@ def _coerce_int(x):
 def normalize_paperjson(raw: dict) -> dict:
     """
     Tolerant normalizer: fixes common LLM schema drift so Pydantic can validate.
+    Ensures presence and types for: title, tasks, methods, datasets, metrics, ablations.
     """
     out = {}
+
     # title
     out["title"] = _coerce_str(raw.get("title"))
 
@@ -75,7 +91,9 @@ def normalize_paperjson(raw: dict) -> dict:
     out["tasks"] = []
     if isinstance(tasks, list):
         for t in tasks:
-            out["tasks"].append(_coerce_str(t))
+            s = _coerce_str(t)
+            if s:
+                out["tasks"].append(s)
     elif isinstance(tasks, str):
         out["tasks"] = [s.strip() for s in tasks.split(",") if s.strip()]
     else:
@@ -85,6 +103,12 @@ def normalize_paperjson(raw: dict) -> dict:
     out["methods"] = []
     for m in raw.get("methods") or []:
         if not isinstance(m, dict):
+            # allow string names
+            out["methods"].append({
+                "name": _coerce_str(m),
+                "components": [],
+                "losses": [],
+            })
             continue
         name = _coerce_str(m.get("name"))
         components = m.get("components") or []
@@ -95,17 +119,20 @@ def normalize_paperjson(raw: dict) -> dict:
             losses = [c.strip() for c in losses.split(",") if c.strip()]
         out["methods"].append({
             "name": name,
-            "components": [ _coerce_str(c) for c in components if _coerce_str(c) ],
-            "losses": [ _coerce_str(c) for c in losses if _coerce_str(c) ],
+            "components": [_coerce_str(c) for c in components if _coerce_str(c)],
+            "losses": [_coerce_str(c) for c in losses if _coerce_str(c)],
         })
 
-    # datasets
+    # datasets (also accept "databases" / "data" synonyms)
+    datasets = raw.get("datasets")
+    if datasets is None:
+        datasets = raw.get("databases") or raw.get("data") or []
     out["datasets"] = []
-    for d in raw.get("datasets") or []:
+    for d in datasets or []:
         if isinstance(d, dict):
             out["datasets"].append({
                 "name": _coerce_str(d.get("name")),
-                "split": (_coerce_str(d.get("split")) or None)
+                "split": (_coerce_str(d.get("split")) or None),
             })
         elif isinstance(d, str):
             out["datasets"].append({"name": d.strip(), "split": None})
@@ -124,12 +151,12 @@ def normalize_paperjson(raw: dict) -> dict:
                 "dataset": ds,
                 "metric": met,
                 "value": val,
-                "page": page
+                "page": page,
             })
 
     # ablations
     out["ablations"] = []
-    for a in raw.get("ablations") or []:
+    for a in (raw.get("ablations") or []):
         if isinstance(a, dict):
             out["ablations"].append({
                 "variable": _coerce_str(a.get("variable")),
@@ -138,9 +165,17 @@ def normalize_paperjson(raw: dict) -> dict:
         else:
             out["ablations"].append({"variable": _coerce_str(a), "best_value": None})
 
+    # defaults
+    out.setdefault("tasks", [])
+    out.setdefault("methods", [])
+    out.setdefault("datasets", [])
+    out.setdefault("metrics", [])
+    out.setdefault("ablations", [])
+
     return out
 
-router = APIRouter()
+
+# ------------------------- parsing helpers -------------------------
 
 def _strip_code_fences(s: str) -> str:
     s = s.strip()
@@ -149,9 +184,10 @@ def _strip_code_fences(s: str) -> str:
     s = re.sub(r"\s*```\s*$", "", s)
     return s.strip()
 
+
 def _extract_first_balanced_json(s: str):
     """
-    Find the first balanced {...} object (handles extra commentary before/after).
+    Generator: yield each balanced {...} object found in the string.
     """
     start = None
     depth = 0
@@ -164,7 +200,8 @@ def _extract_first_balanced_json(s: str):
             if depth > 0:
                 depth -= 1
                 if depth == 0 and start is not None:
-                    yield s[start:i+1]
+                    yield s[start:i + 1]
+
 
 def parse_json_safely(text: str) -> dict:
     """
@@ -185,7 +222,7 @@ def parse_json_safely(text: str) -> dict:
     first = t.find("{")
     last = t.rfind("}")
     if first != -1 and last != -1 and last > first:
-        candidate = t[first:last+1]
+        candidate = t[first:last + 1]
         try:
             return json.loads(candidate)
         except Exception:
@@ -201,6 +238,11 @@ def parse_json_safely(text: str) -> dict:
     # Nothing parsed
     raise ValueError("could not parse JSON from model output")
 
+
+# ------------------------- route -------------------------
+
+router = APIRouter()
+
 @router.post("/", response_model=ExtractResponse)
 async def extract(req: ExtractRequest):
     index = IndexStore(EMBED_MODEL, INDEX_DIR)
@@ -213,32 +255,36 @@ async def extract(req: ExtractRequest):
         raise HTTPException(404, "No content found for extraction. Did you ingest the PDF?")
 
     context = Retriever.pack_context(chunks)
+
+    # System & user prompts
     system = JSON_SYSTEM.format(schema=JSON_SCHEMA_STR)
-    # Stronger instruction to reduce markdown
-    # user = JSON_USER_TEMPLATE.format(context=context) + "\nReturn ONLY a single JSON object, no markdown, no explanation."
     user = (
         JSON_USER_TEMPLATE.format(context=context)
         + "\nReturn ONLY one JSON object. No markdown. "
         + "Keys must be exactly: title (string), tasks (list of strings), methods (list of {name, components, losses}), "
-        "datasets (list of {name, split|null}), metrics (list of {dataset, metric, value:number, page:int}), "
-        "ablations (list of {variable, best_value}). "
-        "Do not wrap strings in nested objects like {'text': ...}."
+          "datasets (list of {name, split|null}), metrics (list of {dataset, metric, value:number, page:int}), "
+          "ablations (list of {variable, best_value}). "
+          "Do not wrap strings in nested objects like {'text': ...}."
     )
+
     llm = LLMClient(MODEL_PRIMARY, MODEL_LOCAL, USE_LOCAL, OPENAI_API_KEY)
 
     try:
+        # expect_json=True enables JSON mode (OpenAI response_format or Ollama format:"json")
         raw = llm.generate(system, user, expect_json=True)
     except requests.HTTPError as e:
         if e.response is not None and e.response.status_code == 401:
-            raise HTTPException(401, "OpenAI auth failed: set OPENAI_API_KEY in .env, or set USE_LOCAL=1 to use Ollama.")
+            raise HTTPException(
+                401,
+                "OpenAI auth failed: set OPENAI_API_KEY in .env, or set USE_LOCAL=1 to use Ollama."
+            )
         raise
 
-    # Robust parsing
+    # Robust parsing + normalization
     try:
         data = parse_json_safely(raw)
         data = normalize_paperjson(data)
     except Exception:
-        # Attach a snippet of the model output to help debugging
         snippet = (raw or "")[:400]
         raise HTTPException(502, f"Model did not return clean JSON. First 400 chars:\n{snippet}")
 

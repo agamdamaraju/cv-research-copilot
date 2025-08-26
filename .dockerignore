@@ -1,0 +1,13 @@
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.DS_Store
+.env
+data/pdfs/*
+data/store/*
+data/index/*
+dist
+build

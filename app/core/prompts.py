@@ -33,3 +33,38 @@ JSON_SCHEMA_STR = (
     '  "ablations": [{"variable": "str", "best_value": "str|float|int"}]\n'
     '}'
 )
+
+EXTRACT_SYSTEM = """You extract structured data from computer vision papers.
+
+    RULES (very important):
+    - OUTPUT STRICT JSON ONLY. No prose, no preamble, no code fences.
+    - The top-level object MUST match this JSON schema (types and keys):
+    {
+    "title": "string",
+    "tasks": ["string", ...],
+    "methods": [{"name": "string", "components": ["string", ...], "losses": ["string", ...]}],
+    "datasets": [{"name": "string", "split": "string"}],
+    "metrics": [{"dataset": "string", "metric": "string", "value": 0.0, "page": 1}],
+    "ablations": [{"name": "string", "finding": "string", "page": 1}]
+    }
+    - Every numeric value extracted from tables/figures MUST include an integer "page".
+    - If a field is unknown, return an empty list [] (not null).
+    - Use the exact key 'datasets' (not 'databases', not 'data').
+    """
+
+EXTRACT_USER_TMPL = """Paper title (if known): {title}
+
+    You are given chunks from the paper with page anchors like [p:##].
+
+    Extract:
+    - title
+    - tasks (short phrases)
+    - methods (name, components, losses if mentioned)
+    - datasets (name, split)
+    - metrics (dataset, metric, value, page)
+    - ablations (name, finding, page)
+
+    Return ONLY a minified JSON object (one line ok). No text outside JSON.
+    Context:
+    {context}
+    """

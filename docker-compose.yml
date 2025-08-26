@@ -1,0 +1,41 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      API_PORT: "8000"
+      UI_PORT: "8501"
+    volumes:
+      - ./data/pdfs:/app/data/pdfs
+      - ./data/store:/app/data/store
+      - ./data/index:/app/data/index
+      - ./.streamlit:/root/.streamlit
+    ports:
+      - "8000:8000"
+      - "8501:8501"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    profiles: ["local", "openai"]
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-lc", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    profiles: ["local"]
+
+volumes:
+  ollama:

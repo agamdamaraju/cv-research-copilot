@@ -2,7 +2,6 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from pathlib import Path
 import hashlib
 import fitz  
-
 from app.schemas import IngestResponse
 from app.deps import PDF_DIR, STORE_DIR, INDEX_DIR, EMBED_MODEL
 from app.core.parsing import parse_pdf_to_blocks
@@ -10,7 +9,6 @@ from app.core.chunking import chunk_blocks
 from app.core.embed import IndexStore
 
 router = APIRouter()
-
 
 def _hash_file(contents: bytes) -> str:
     """Stable doc_id based on file content."""
